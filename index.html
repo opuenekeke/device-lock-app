@@ -72,7 +72,6 @@
         }
         .status-green { background: #d4edda; color: #155724; }
         .status-orange { background: #fff3cd; color: #856404; }
-        .status-red { background: #f8d7da; color: #721c24; }
         .status-blue { background: #d1ecf1; color: #0c5460; }
         .progress-section { margin: 16px 0; }
         .progress-label {
@@ -200,8 +199,6 @@
 
             <div id="devices-container"></div>
 
-            <div id="debug-container" class="debug-box hidden"></div>
-
             <div class="support-card">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                     <span style="font-size: 24px;">📞</span>
@@ -229,17 +226,12 @@
         const userNameEl = document.getElementById('user-name');
         const walletBalanceEl = document.getElementById('wallet-balance');
         const devicesContainerEl = document.getElementById('devices-container');
-        const debugContainerEl = document.getElementById('debug-container');
 
-        // ========== CRITICAL FIX: Parse URL directly ==========
+        // ========== GET SESSION FROM URL ==========
         function getSessionFromUrl() {
-            // Get the full URL
             const url = new URL(window.location.href);
-            
-            // Try to get from startapp parameter first (Telegram Mini App way)
             let startParam = url.searchParams.get('startapp');
             
-            // If no startapp, try direct query parameters
             if (!startParam) {
                 const session = url.searchParams.get('session');
                 const token = url.searchParams.get('token');
@@ -251,73 +243,31 @@
             return startParam;
         }
 
-        // ========== DEBUG: Show URL info ==========
-        function showDebug(message, data) {
-            console.log('🔍 DEBUG:', message, data);
-            debugContainerEl.classList.remove('hidden');
-            debugContainerEl.innerHTML = `
-                <b>🔍 Debug Info:</b><br>
-                ${message}<br>
-                <br>
-                <b>URL:</b> ${window.location.href}<br>
-                <b>startapp:</b> ${new URL(window.location.href).searchParams.get('startapp') || 'none'}<br>
-                <b>session param:</b> ${new URL(window.location.href).searchParams.get('session') || 'none'}<br>
-                <b>token param:</b> ${new URL(window.location.href).searchParams.get('token') || 'none'}<br>
-                <br>
-                <b>Raw Data:</b><br>
-                ${JSON.stringify(data, null, 2)}
-            `;
-        }
-
         async function init() {
             try {
-                // ========== GET SESSION DATA FROM URL ==========
                 const startParam = getSessionFromUrl();
-                console.log('📱 URL Start Param:', startParam);
-                console.log('📱 Full URL:', window.location.href);
-                
-                showDebug('Session data from URL', { startParam, url: window.location.href });
+                console.log('📱 Start Param:', startParam);
 
                 if (!startParam) {
-                    throw new Error('No session data found. Please open this Mini App from the Telegram bot using the "OPEN MINI APP" button.');
+                    throw new Error('No session data found. Please open from Telegram bot.');
                 }
 
-                // Parse the parameters
-                let sessionId, token;
-                
-                if (startParam.includes('session=')) {
-                    // It's a query string format
-                    const params = new URLSearchParams(startParam);
-                    sessionId = params.get('session');
-                    token = params.get('token');
-                } else {
-                    // It's a raw string - try to parse it
-                    try {
-                        const parsed = JSON.parse(startParam);
-                        sessionId = parsed.session;
-                        token = parsed.token;
-                    } catch (e) {
-                        // If it's just a session ID
-                        sessionId = startParam;
-                        token = 'default';
-                    }
-                }
-
-                console.log('✅ Session ID:', sessionId?.substring(0, 10) + '...');
-                console.log('✅ Token:', token?.substring(0, 10) + '...');
+                const params = new URLSearchParams(startParam);
+                const sessionId = params.get('session');
+                const token = params.get('token');
 
                 if (!sessionId) {
-                    throw new Error('Invalid session data. Please generate a new link.');
+                    throw new Error('Invalid session data');
                 }
 
                 loadingEl.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;" class="pulse">📱</div>
+                    <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
                     <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Loading your devices...</div>
                     <div style="font-size: 14px;">Session: ${sessionId.substring(0, 8)}...</div>
                 `;
 
-                // ========== MOCK DATA FOR TESTING ==========
-                // Your bot will replace this with real API call
+                // ========== CALL YOUR BOT'S API ==========
+                // For now, use mock data - your bot will replace this
                 setTimeout(() => {
                     const mockData = {
                         success: true,
@@ -340,6 +290,7 @@
                                     totalAmount: '₦120,000',
                                     paymentsMade: 2,
                                     totalPayments: 6,
+                                    progress: 33,
                                     nextPayment: {
                                         amount: '₦20,000',
                                         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NG'),
@@ -363,20 +314,37 @@
                                     totalAmount: '₦320,000',
                                     paymentsMade: 12,
                                     totalPayments: 12,
+                                    progress: 100,
                                     nextPayment: null,
                                     imeiStatus: 'locked',
                                     unlockable: true
                                 }
                             }
-                        ],
-                        session: {
-                            id: sessionId,
-                            token: token
-                        }
+                        ]
                     };
 
                     renderApp(mockData);
                 }, 1500);
+
+                // ========== REAL API CALL (UNCOMMENT WHEN READY) ==========
+                /*
+                try {
+                    const response = await fetch(`https://your-bot-domain.com/api/device-data?sessionId=${sessionId}&token=${token}`);
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Failed to load device data');
+                    }
+                    
+                    renderApp(data);
+                } catch (apiError) {
+                    console.error('API Error:', apiError);
+                    // Fallback to mock data
+                    setTimeout(() => {
+                        renderApp(mockData);
+                    }, 1500);
+                }
+                */
 
             } catch (error) {
                 console.error('❌ Error:', error);
@@ -398,15 +366,15 @@
                     <div class="card" style="text-align: center; padding: 40px 20px;">
                         <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
                         <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">No Devices Found</div>
-                        <div style="font-size: 14px;">You don't have any active devices yet.</div>
                     </div>
                 `;
             } else {
                 data.devices.forEach(device => {
                     const statusClass = `status-${device.status.color}`;
-                    const progress = device.details.totalPayments > 0 
-                        ? Math.round((device.details.paymentsMade / device.details.totalPayments) * 100) 
-                        : 0;
+                    const progress = device.details.progress || 
+                        (device.details.totalPayments > 0 
+                            ? Math.round((device.details.paymentsMade / device.details.totalPayments) * 100) 
+                            : 0);
 
                     devicesHtml += `
                         <div class="device-card">
@@ -466,7 +434,7 @@
                             ` : ''}
 
                             ${device.details.unlockable ? `
-                                <button class="button" onclick="alert('Unlock request sent to admin!')" style="margin-top: 20px;">
+                                <button class="button" onclick="alert('✅ Unlock request sent to admin!')">
                                     🔓 Request Unlock
                                 </button>
                             ` : ''}
@@ -484,7 +452,6 @@
             errorMessageEl.textContent = message;
         }
 
-        // Start the app
         init();
     </script>
 </body>
