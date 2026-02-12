@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Lock App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>Device Lock App</h1>
+        <p>Loading device data...</p>
+    </div>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Get start parameter
+        const startParam = tg.initDataUnsafe?.start_param || '';
+        console.log('Start param:', startParam);
+        
+        // Parse session and token
+        const params = new URLSearchParams(startParam);
+        const session = params.get('session');
+        const token = params.get('token');
+        
+        document.getElementById('app').innerHTML = `
+            <h1>📱 Device Lock</h1>
+            <p>Session: ${session?.substring(0, 10)}...</p>
+            <p>Status: Connected to Telegram</p>
+            <button onclick="tg.close()">Close</button>
+        `;
+    </script>
+</body>
+</html>
