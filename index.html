@@ -72,7 +72,9 @@
         }
         .status-green { background: #d4edda; color: #155724; }
         .status-orange { background: #fff3cd; color: #856404; }
+        .status-red { background: #f8d7da; color: #721c24; }
         .status-blue { background: #d1ecf1; color: #0c5460; }
+        .status-gray { background: #e2e3e5; color: #383d41; }
         .progress-section { margin: 16px 0; }
         .progress-label {
             display: flex;
@@ -156,16 +158,6 @@
             font-size: 14px;
             font-weight: 600;
         }
-        .debug-box {
-            background: #f0f0f0;
-            padding: 12px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 12px;
-            margin-top: 20px;
-            word-break: break-all;
-            color: #333;
-        }
     </style>
 </head>
 <body>
@@ -180,7 +172,8 @@
 
         <div id="loading" class="loading">
             <div style="font-size: 48px; margin-bottom: 16px;">🔐</div>
-            <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Connecting...</div>
+            <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Connecting to your devices...</div>
+            <div style="font-size: 14px;">Please wait</div>
         </div>
 
         <div id="error" class="error hidden">
@@ -243,22 +236,34 @@
             return startParam;
         }
 
+        // ========== GET API BASE URL ==========
+        function getApiBaseUrl() {
+            // Use relative path - this will work with your bot's server
+            // Your bot server must be publicly accessible
+            return ''; // Empty means use same domain as this page
+            // If your bot is on a different domain, change this to:
+            // return 'https://your-bot-domain.com';
+        }
+
         async function init() {
             try {
                 const startParam = getSessionFromUrl();
                 console.log('📱 Start Param:', startParam);
 
                 if (!startParam) {
-                    throw new Error('No session data found. Please open from Telegram bot.');
+                    throw new Error('No session data found. Please open this Mini App from the Telegram bot using the "OPEN MINI APP" button.');
                 }
 
                 const params = new URLSearchParams(startParam);
                 const sessionId = params.get('session');
                 const token = params.get('token');
 
-                if (!sessionId) {
-                    throw new Error('Invalid session data');
+                if (!sessionId || !token) {
+                    throw new Error('Invalid session data. Please generate a new link.');
                 }
+
+                console.log('✅ Session ID:', sessionId.substring(0, 8) + '...');
+                console.log('✅ Token:', token.substring(0, 8) + '...');
 
                 loadingEl.innerHTML = `
                     <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
@@ -266,85 +271,26 @@
                     <div style="font-size: 14px;">Session: ${sessionId.substring(0, 8)}...</div>
                 `;
 
-                // ========== CALL YOUR BOT'S API ==========
-                // For now, use mock data - your bot will replace this
-                setTimeout(() => {
-                    const mockData = {
-                        success: true,
-                        user: {
-                            name: 'Test User',
-                            wallet: '₦25,000'
-                        },
-                        devices: [
-                            {
-                                make: 'Samsung',
-                                model: 'Galaxy A14',
-                                imei: '356789012345678',
-                                status: {
-                                    code: 'active',
-                                    message: 'Installment active',
-                                    icon: '📱',
-                                    color: 'blue'
-                                },
-                                details: {
-                                    totalAmount: '₦120,000',
-                                    paymentsMade: 2,
-                                    totalPayments: 6,
-                                    progress: 33,
-                                    nextPayment: {
-                                        amount: '₦20,000',
-                                        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NG'),
-                                        overdue: false
-                                    },
-                                    imeiStatus: 'locked',
-                                    unlockable: false
-                                }
-                            },
-                            {
-                                make: 'iPhone',
-                                model: 'XR',
-                                imei: '456789012345679',
-                                status: {
-                                    code: 'pending_unlock',
-                                    message: 'Fully paid - contact support',
-                                    icon: '⏳',
-                                    color: 'orange'
-                                },
-                                details: {
-                                    totalAmount: '₦320,000',
-                                    paymentsMade: 12,
-                                    totalPayments: 12,
-                                    progress: 100,
-                                    nextPayment: null,
-                                    imeiStatus: 'locked',
-                                    unlockable: true
-                                }
-                            }
-                        ]
-                    };
-
-                    renderApp(mockData);
-                }, 1500);
-
-                // ========== REAL API CALL (UNCOMMENT WHEN READY) ==========
-                /*
-                try {
-                    const response = await fetch(`https://your-bot-domain.com/api/device-data?sessionId=${sessionId}&token=${token}`);
-                    const data = await response.json();
-                    
-                    if (!data.success) {
-                        throw new Error(data.error || 'Failed to load device data');
-                    }
-                    
-                    renderApp(data);
-                } catch (apiError) {
-                    console.error('API Error:', apiError);
-                    // Fallback to mock data
-                    setTimeout(() => {
-                        renderApp(mockData);
-                    }, 1500);
+                // ========== CALL YOUR BOT'S API - NO MOCK DATA! ==========
+                const apiBase = getApiBaseUrl();
+                const apiUrl = `${apiBase}/api/device-data?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
+                
+                console.log('📡 Fetching from:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
                 }
-                */
+                
+                const data = await response.json();
+                console.log('📡 API Response:', data);
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load device data');
+                }
+                
+                renderApp(data);
 
             } catch (error) {
                 console.error('❌ Error:', error);
@@ -359,91 +305,133 @@
             userNameEl.textContent = `👤 ${data.user?.name || 'Customer'}`;
             walletBalanceEl.textContent = data.user?.wallet || '₦0';
 
-            let devicesHtml = '';
-
             if (!data.devices || data.devices.length === 0) {
-                devicesHtml = `
+                devicesContainerEl.innerHTML = `
                     <div class="card" style="text-align: center; padding: 40px 20px;">
                         <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
                         <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">No Devices Found</div>
+                        <div style="font-size: 14px; color: var(--tg-theme-hint-color, #6c757d);">
+                            You don't have any active devices yet.
+                        </div>
                     </div>
                 `;
-            } else {
-                data.devices.forEach(device => {
-                    const statusClass = `status-${device.status.color}`;
-                    const progress = device.details.progress || 
-                        (device.details.totalPayments > 0 
-                            ? Math.round((device.details.paymentsMade / device.details.totalPayments) * 100) 
-                            : 0);
+                return;
+            }
 
-                    devicesHtml += `
-                        <div class="device-card">
-                            <div class="device-header">
-                                <div class="device-name">
-                                    <span>${device.status.icon}</span>
-                                    ${device.make} ${device.model}
-                                </div>
+            let devicesHtml = '';
+
+            data.devices.forEach(device => {
+                const statusClass = `status-${device.status.color}`;
+                const progress = device.details.progress || 
+                    (device.details.totalPayments > 0 
+                        ? Math.round((device.details.paymentsMade / device.details.totalPayments) * 100) 
+                        : 0);
+
+                devicesHtml += `
+                    <div class="device-card">
+                        <div class="device-header">
+                            <div class="device-name">
+                                <span>${device.status.icon || '📱'}</span>
+                                ${device.make} ${device.model}
                             </div>
-                            
-                            <div class="imei">📱 IMEI: ${device.imei}</div>
-                            
-                            <span class="status-badge ${statusClass}">
-                                ${device.status.message}
-                            </span>
+                        </div>
+                        
+                        <div class="imei">📱 IMEI: ${device.imei}</div>
+                        
+                        <span class="status-badge ${statusClass}">
+                            ${device.status.message}
+                        </span>
 
-                            <div class="progress-section">
-                                <div class="progress-label">
-                                    <span>Payment Progress</span>
-                                    <span style="font-weight: 600;">${device.details.paymentsMade}/${device.details.totalPayments}</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width: ${progress}%;"></div>
-                                </div>
+                        <div class="progress-section">
+                            <div class="progress-label">
+                                <span>Payment Progress</span>
+                                <span style="font-weight: 600;">${device.details.paymentsMade || 0}/${device.details.totalPayments || 0}</span>
                             </div>
-
-                            <div class="details-grid">
-                                <div class="detail-item">
-                                    <span class="detail-label">Total Amount</span>
-                                    <span class="detail-value">${device.details.totalAmount}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">IMEI Status</span>
-                                    <span class="detail-value" style="text-transform: capitalize;">
-                                        ${device.details.imeiStatus}
-                                    </span>
-                                </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${progress}%;"></div>
                             </div>
+                        </div>
 
-                            ${device.details.nextPayment ? `
-                                <div style="margin-top: 16px; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 12px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <div style="font-size: 12px;">Next Payment</div>
-                                            <div style="font-size: 18px; font-weight: 700; margin-top: 4px;">
-                                                ${device.details.nextPayment.amount}
-                                            </div>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Total Amount</span>
+                                <span class="detail-value">${device.details.totalAmount || '₦0'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">IMEI Status</span>
+                                <span class="detail-value" style="text-transform: capitalize;">
+                                    ${device.details.imeiStatus || 'unknown'}
+                                </span>
+                            </div>
+                        </div>
+
+                        ${device.details.nextPayment ? `
+                            <div style="margin-top: 16px; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #6c757d);">Next Payment</div>
+                                        <div style="font-size: 18px; font-weight: 700; margin-top: 4px;">
+                                            ${device.details.nextPayment.amount}
                                         </div>
-                                        <div style="text-align: right;">
-                                            <div style="font-size: 12px;">Due Date</div>
-                                            <div style="font-size: 14px; font-weight: 600; margin-top: 4px;">
-                                                ${device.details.nextPayment.dueDate}
-                                            </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #6c757d);">Due Date</div>
+                                        <div style="font-size: 14px; font-weight: 600; margin-top: 4px; ${device.details.nextPayment.overdue ? 'color: #dc3545;' : ''}">
+                                            ${device.details.nextPayment.dueDate}
+                                            ${device.details.nextPayment.overdue ? ' ⚠️' : ''}
                                         </div>
                                     </div>
                                 </div>
-                            ` : ''}
+                            </div>
+                        ` : ''}
 
-                            ${device.details.unlockable ? `
-                                <button class="button" onclick="alert('✅ Unlock request sent to admin!')">
-                                    🔓 Request Unlock
-                                </button>
-                            ` : ''}
-                        </div>
-                    `;
-                });
-            }
+                        ${device.details.unlockable ? `
+                            <button class="button" onclick="requestUnlock('${device.imei}')">
+                                🔓 Request Unlock
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            });
 
             devicesContainerEl.innerHTML = devicesHtml;
+        }
+
+        async function requestUnlock(imei) {
+            try {
+                const startParam = getSessionFromUrl();
+                const params = new URLSearchParams(startParam);
+                const sessionId = params.get('session');
+                const token = params.get('token');
+                
+                tg.showPopup({
+                    title: 'Request Unlock',
+                    message: `Request unlock for device with IMEI: ${imei}?`,
+                    buttons: [
+                        { id: 'confirm', type: 'default', text: 'Confirm' },
+                        { id: 'cancel', type: 'cancel', text: 'Cancel' }
+                    ]
+                }, async (buttonId) => {
+                    if (buttonId === 'confirm') {
+                        const apiBase = getApiBaseUrl();
+                        const response = await fetch(`${apiBase}/api/request-unlock`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId, token, imei })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            tg.showAlert('✅ ' + result.message);
+                        } else {
+                            tg.showAlert('❌ ' + result.error);
+                        }
+                    }
+                });
+            } catch (error) {
+                tg.showAlert('❌ Error: ' + error.message);
+            }
         }
 
         function showError(message) {
@@ -452,6 +440,7 @@
             errorMessageEl.textContent = message;
         }
 
+        // Start the app
         init();
     </script>
 </body>
