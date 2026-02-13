@@ -212,6 +212,7 @@
         tg.ready();
         tg.expand();
 
+        // DOM Elements
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
         const errorMessageEl = document.getElementById('error-message');
@@ -219,6 +220,17 @@
         const userNameEl = document.getElementById('user-name');
         const walletBalanceEl = document.getElementById('wallet-balance');
         const devicesContainerEl = document.getElementById('devices-container');
+
+        // ========== 🔧 CONFIGURATION - CHANGE THIS URL! ==========
+        // ⚠️ IMPORTANT: Replace this with your actual ngrok URL
+        const CONFIG = {
+            API_BASE_URL: 'https://0465-197-211-58-60.ngrok-free.app', // ← YOUR NGROK URL
+            API_ENDPOINTS: {
+                DEVICE_DATA: '/api/device-data',
+                REQUEST_UNLOCK: '/api/request-unlock',
+                HEALTH: '/api/health'
+            }
+        };
 
         // ========== GET SESSION FROM URL ==========
         function getSessionFromUrl() {
@@ -236,68 +248,69 @@
             return startParam;
         }
 
-        // ========== GET API BASE URL ==========
-        function getApiBaseUrl() {
-            // Use relative path - this will work with your bot's server
-            // Your bot server must be publicly accessible
-            return 'https://0465-197-211-58-60.ngrok-free.app'; // Empty means use same domain as this page
-            // If your bot is on a different domain, change this to:
-            // return 'https://your-bot-domain.com';
+        // ========== FETCH DEVICE DATA ==========
+        async function fetchDeviceData(sessionId, token) {
+            const url = `${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.DEVICE_DATA}?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
+            
+            console.log('📡 Fetching from:', url);
+            
+            // 🚨 CRITICAL: Add ngrok-skip-browser-warning header
+            const response = await fetch(url, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return data;
         }
 
-        async function init() {
+        // ========== REQUEST UNLOCK ==========
+        async function requestUnlock(imei) {
             try {
                 const startParam = getSessionFromUrl();
-                console.log('📱 Start Param:', startParam);
-
-                if (!startParam) {
-                    throw new Error('No session data found. Please open this Mini App from the Telegram bot using the "OPEN MINI APP" button.');
-                }
-
                 const params = new URLSearchParams(startParam);
                 const sessionId = params.get('session');
                 const token = params.get('token');
-
-                if (!sessionId || !token) {
-                    throw new Error('Invalid session data. Please generate a new link.');
-                }
-
-                console.log('✅ Session ID:', sessionId.substring(0, 8) + '...');
-                console.log('✅ Token:', token.substring(0, 8) + '...');
-
-                loadingEl.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
-                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Loading your devices...</div>
-                    <div style="font-size: 14px;">Session: ${sessionId.substring(0, 8)}...</div>
-                `;
-
-                // ========== CALL YOUR BOT'S API - NO MOCK DATA! ==========
-                const apiBase = getApiBaseUrl();
-                const apiUrl = `${apiBase}/api/device-data?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
                 
-                console.log('📡 Fetching from:', apiUrl);
-                
-                const response = await fetch(apiUrl);
-                
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('📡 API Response:', data);
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load device data');
-                }
-                
-                renderApp(data);
-
+                tg.showPopup({
+                    title: 'Request Unlock',
+                    message: `Request unlock for device with IMEI: ${imei}?`,
+                    buttons: [
+                        { id: 'confirm', type: 'default', text: 'Confirm' },
+                        { id: 'cancel', type: 'cancel', text: 'Cancel' }
+                    ]
+                }, async (buttonId) => {
+                    if (buttonId === 'confirm') {
+                        const url = `${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.REQUEST_UNLOCK}`;
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'ngrok-skip-browser-warning': 'true'
+                            },
+                            body: JSON.stringify({ sessionId, token, imei })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            tg.showAlert('✅ ' + result.message);
+                        } else {
+                            tg.showAlert('❌ ' + result.error);
+                        }
+                    }
+                });
             } catch (error) {
-                console.error('❌ Error:', error);
-                showError(error.message);
+                console.error('❌ Unlock error:', error);
+                tg.showAlert('❌ Error: ' + error.message);
             }
         }
 
+        // ========== RENDER DEVICES ==========
         function renderApp(data) {
             loadingEl.classList.add('hidden');
             contentEl.classList.remove('hidden');
@@ -397,48 +410,57 @@
             devicesContainerEl.innerHTML = devicesHtml;
         }
 
-        async function requestUnlock(imei) {
-            try {
-                const startParam = getSessionFromUrl();
-                const params = new URLSearchParams(startParam);
-                const sessionId = params.get('session');
-                const token = params.get('token');
-                
-                tg.showPopup({
-                    title: 'Request Unlock',
-                    message: `Request unlock for device with IMEI: ${imei}?`,
-                    buttons: [
-                        { id: 'confirm', type: 'default', text: 'Confirm' },
-                        { id: 'cancel', type: 'cancel', text: 'Cancel' }
-                    ]
-                }, async (buttonId) => {
-                    if (buttonId === 'confirm') {
-                        const apiBase = getApiBaseUrl();
-                        const response = await fetch(`${apiBase}/api/request-unlock`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sessionId, token, imei })
-                        });
-                        
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            tg.showAlert('✅ ' + result.message);
-                        } else {
-                            tg.showAlert('❌ ' + result.error);
-                        }
-                    }
-                });
-            } catch (error) {
-                tg.showAlert('❌ Error: ' + error.message);
-            }
-        }
-
         function showError(message) {
             loadingEl.classList.add('hidden');
             errorEl.classList.remove('hidden');
             errorMessageEl.textContent = message;
         }
+
+        // ========== INITIALIZE APP ==========
+        async function init() {
+            try {
+                const startParam = getSessionFromUrl();
+                console.log('📱 Start Param:', startParam);
+
+                if (!startParam) {
+                    throw new Error('No session data found. Please open this Mini App from the Telegram bot using the "OPEN MINI APP" button.');
+                }
+
+                const params = new URLSearchParams(startParam);
+                const sessionId = params.get('session');
+                const token = params.get('token');
+
+                if (!sessionId || !token) {
+                    throw new Error('Invalid session data. Please generate a new link.');
+                }
+
+                console.log('✅ Session ID:', sessionId.substring(0, 8) + '...');
+                console.log('✅ Token:', token.substring(0, 8) + '...');
+
+                loadingEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Loading your devices...</div>
+                    <div style="font-size: 14px;">Session: ${sessionId.substring(0, 8)}...</div>
+                `;
+
+                // Fetch real device data from your bot
+                const data = await fetchDeviceData(sessionId, token);
+                console.log('📡 API Response:', data);
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load device data');
+                }
+                
+                renderApp(data);
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                showError(error.message);
+            }
+        }
+
+        // Make requestUnlock available globally
+        window.requestUnlock = requestUnlock;
 
         // Start the app
         init();
