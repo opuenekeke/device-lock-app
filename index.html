@@ -221,10 +221,9 @@
         const walletBalanceEl = document.getElementById('wallet-balance');
         const devicesContainerEl = document.getElementById('devices-container');
 
-        // ========== 🔧 CONFIGURATION - CHANGE THIS URL! ==========
-        // ⚠️ IMPORTANT: Replace this with your actual ngrok URL
+        // ========== ✅ YOUR WORKING NGROK URL ==========
         const CONFIG = {
-            API_BASE_URL: ' https://196f-197-211-52-74.ngrok-free.app', // ← YOUR NGROK URL
+            API_BASE_URL: 'https://196f-197-211-52-74.ngrok-free.app', // ← THIS IS CORRECT!
             API_ENDPOINTS: {
                 DEVICE_DATA: '/api/device-data',
                 REQUEST_UNLOCK: '/api/request-unlock',
@@ -254,19 +253,23 @@
             
             console.log('📡 Fetching from:', url);
             
-            // 🚨 CRITICAL: Add ngrok-skip-browser-warning header
-            const response = await fetch(url, {
-                headers: {
-                    'ngrok-skip-browser-warning': 'true'
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
                 }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('❌ Fetch error:', error);
+                throw error;
             }
-            
-            const data = await response.json();
-            return data;
         }
 
         // ========== REQUEST UNLOCK ==========
@@ -443,7 +446,7 @@
                     <div style="font-size: 14px;">Session: ${sessionId.substring(0, 8)}...</div>
                 `;
 
-                // Fetch real device data from your bot
+                // Fetch real device data
                 const data = await fetchDeviceData(sessionId, token);
                 console.log('📡 API Response:', data);
                 
